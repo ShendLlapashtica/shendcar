@@ -1,5 +1,5 @@
-// Bundled at deploy time by Vercel's bundler — no fs needed in production
-const FALLBACK_DATA = require('./fallback-cars.json');
+const path = require('path');
+const fs   = require('fs');
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -74,15 +74,20 @@ async function tryProxy(targetUrl) {
   throw lastErr || new Error('All sources failed');
 }
 
-// Lazy-load KV to avoid crashing when env vars are missing
+// KV helpers — optional, fail gracefully if not configured
 let _kv = null;
 async function getKv() {
-  if (_kv) return _kv;
+  if (_kv !== undefined) return _kv;
   try {
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+      _kv = null;
+      return null;
+    }
     const mod = await import('@vercel/kv');
     _kv = mod.kv;
     return _kv;
   } catch {
+    _kv = null;
     return null;
   }
 }
@@ -110,21 +115,38 @@ async function kvSet(key, data, ttl) {
   }
 }
 
-// Static JSON fallback — bundled at deploy time (2 000 cars, ~1.8 MB)
-function getStaticFallback(pageNum, pageSize) {
+// Static JSON fallback — 2 000 cars committed in api/fallback-cars.json
+let _staticCache = null;
+function loadStatic() {
+  if (_staticCache !== null) return _staticCache;
   try {
-    const all = FALLBACK_DATA.SearchResults || [];
-    const start = pageNum * pageSize;
-    const slice = all.slice(start, start + pageSize);
-    if (slice.length === 0) return null;
-    return {
-      Count: FALLBACK_DATA.Count || all.length,
-      SearchResults: slice,
-      _source: 'static-fallback',
-    };
+    // Try require() first (bundled by ncc at deploy time)
+    _staticCache = require('./fallback-cars.json');
+    return _staticCache;
   } catch {
-    return null;
+    // Fallback: read from filesystem (local dev)
+    try {
+      const file = path.join(__dirname, 'fallback-cars.json');
+      _staticCache = JSON.parse(fs.readFileSync(file, 'utf8'));
+      return _staticCache;
+    } catch {
+      _staticCache = { Count: 0, SearchResults: [] };
+      return _staticCache;
+    }
   }
+}
+
+function getStaticFallback(pageNum, pageSize) {
+  const data = loadStatic();
+  const all = data.SearchResults || [];
+  const start = pageNum * pageSize;
+  const slice = all.slice(start, start + pageSize);
+  if (slice.length === 0) return null;
+  return {
+    Count: data.Count || all.length,
+    SearchResults: slice,
+    _source: 'static-fallback',
+  };
 }
 
 function normaliseEncarResponse(data) {
@@ -174,7 +196,6 @@ module.exports = async function handler(req, res) {
     const raw  = await tryProxy(encarUrl);
     const data = normaliseEncarResponse(raw);
     if (data) {
-      // Opportunistically warm the KV cache for unfiltered pages
       if (unfiltered && data.SearchResults.length > 0) {
         kvSet(kvKey, data, 7 * 3600);
       }
@@ -194,13 +215,13 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // ── 4. Static JSON fallback ────────────────────────────────────────────────
+  // ── 4. Static JSON fallback (always available) ─────────────────────────────
   const staticData = getStaticFallback(pageNum, pageSize);
   if (staticData) {
     res.setHeader('X-Cache', 'STATIC');
     return res.status(200).json(staticData);
   }
 
-  // ── 5. All sources failed ──────────────────────────────────────────────────
+  // ── 5. All sources exhausted ───────────────────────────────────────────────
   return res.status(502).json({ error: 'Could not reach Encar', detail: 'All sources exhausted' });
 };
