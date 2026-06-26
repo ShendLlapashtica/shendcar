@@ -43,7 +43,6 @@ export const MANUFACTURER_MAP: Record<string, string> = {
   '삼성': 'Samsung',
   '인피니티': 'Infiniti',
   '아큐라': 'Acura',
-  '볼보': 'Volvo',
   '스바루': 'Subaru',
   '마쯔다': 'Mazda',
   '미쓰비시': 'Mitsubishi',
