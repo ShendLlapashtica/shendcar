@@ -1,6 +1,10 @@
 {
+  "version": 2,
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/cars", "destination": "/api/cars.js" },
-    { "source": "/api/car-detail", "destination": "/api/car-detail.js" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
