@@ -7,14 +7,6 @@
   "crons": [
     { "path": "/api/cron/refresh-cars", "schedule": "0 0 * * *" }
   ],
-  "functions": {
-    "api/cars.js": {
-      "includeFiles": "api/fallback-cars.json"
-    },
-    "api/cron/refresh-cars.js": {
-      "maxDuration": 300
-    }
-  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
