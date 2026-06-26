@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/cars", "destination": "/api/cars.js" },
+    { "source": "/api/car-detail", "destination": "/api/car-detail.js" }
+  ]
+}

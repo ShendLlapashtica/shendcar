@@ -1,0 +1,300 @@
+@import '@fontsource/orbitron/400.css';
+@import '@fontsource/orbitron/500.css';
+@import '@fontsource/orbitron/600.css';
+@import '@fontsource/orbitron/700.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Auto IFY Design System - Premium European Automotive Style */
+
+@layer base {
+  :root {
+    /* Core palette - Clean white/gray with electric blue accent */
+    --background: 210 17% 98%; /* #F8F9FA off-white */
+    --foreground: 0 0% 0%; /* Pure black */
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+
+    /* Primary - Bold Red */
+    --primary: 0 84% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Light gray surfaces */
+    --secondary: 210 14% 93%;
+    --secondary-foreground: 0 0% 0%;
+
+    /* Muted - Subtle grays */
+    --muted: 210 14% 96%;
+    --muted-foreground: 215 14% 40%;
+
+    /* Accent - Orange for mileage badges */
+    --accent: 24 95% 53%; /* Orange accent */
+    --accent-foreground: 0 0% 100%;
+
+    --verified: 0 84% 50%;
+    --verified-foreground: 0 0% 100%;
+
+    /* Sold badge - Red */
+    --sold: 0 84% 60%;
+    --sold-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 0 84% 50%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 0%;
+    --sidebar-primary: 0 84% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 14% 96%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 214 20% 88%;
+    --sidebar-ring: 0 84% 50%;
+
+    /* Custom gradients and shadows */
+    --shadow-card: 0 4px 20px -4px hsla(0, 0%, 0%, 0.08);
+    --shadow-card-hover: 0 8px 30px -6px hsla(0, 0%, 0%, 0.15);
+    --gradient-hero: linear-gradient(135deg, hsl(210 17% 98%) 0%, hsl(210 14% 93%) 100%);
+  }
+
+  .dark {
+    --background: 0 0% 5%;
+    --foreground: 210 40% 98%;
+    --card: 0 0% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 0 84% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 20% 15%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 20% 15%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 24 95% 53%;
+    --accent-foreground: 0 0% 100%;
+    --verified: 0 84% 50%;
+    --verified-foreground: 0 0% 100%;
+    --sold: 0 84% 60%;
+    --sold-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 20% 20%;
+    --input: 217 20% 20%;
+    --ring: 0 84% 50%;
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 0 84% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 20% 15%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 20% 20%;
+    --sidebar-ring: 0 84% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+}
+
+@layer components {
+  /* Card hover effect */
+  .car-card {
+    @apply transition-all duration-300 ease-out;
+  }
+  
+  .car-card:hover {
+    @apply -translate-y-1;
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  /* Badge styles */
+  .badge-verified {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  .badge-mileage {
+    @apply bg-accent text-accent-foreground;
+  }
+
+  .badge-sold {
+    @apply bg-sold text-sold-foreground;
+  }
+
+  /* Section underline like logo */
+  .section-underline {
+    @apply border-b-2 border-foreground pb-2;
+  }
+
+  /* Premium button styles */
+  .btn-whatsapp {
+    @apply bg-[hsl(142,70%,45%)] hover:bg-[hsl(142,70%,40%)] text-white font-medium transition-colors;
+  }
+}
+
+@layer utilities {
+  .font-heading {
+    font-family: 'Orbitron', sans-serif;
+  }
+
+  .font-sans {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* ── Encar integration styles ─────────────────────────────────────────────── */
+
+/* Photo gallery */
+.gallery-arrow {
+  @apply absolute top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-colors z-10;
+}
+
+.gallery-count {
+  @apply absolute bottom-2 right-3 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full;
+}
+
+.gallery-strip {
+  @apply flex gap-2 overflow-x-auto p-2 bg-black/10;
+  scrollbar-width: thin;
+}
+
+.gallery-thumb {
+  @apply h-16 w-24 object-cover rounded cursor-pointer flex-shrink-0 opacity-60 border-2 border-transparent transition-all;
+}
+
+.gallery-thumb.active {
+  @apply opacity-100 border-primary;
+}
+
+/* Price calculator */
+.price-calc {
+  @apply bg-amber-50 border border-amber-300 rounded-xl p-4 my-4;
+}
+
+.price-row {
+  @apply flex justify-between py-1 text-sm;
+}
+
+.price-total {
+  @apply font-bold text-base border-t border-amber-300 mt-2 pt-2;
+}
+
+.price-disclaimer {
+  @apply text-xs text-muted-foreground mt-2;
+}
+
+/* Options pills */
+.opts {
+  @apply flex flex-wrap gap-2 mt-2;
+}
+
+.opt-pill {
+  @apply bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-3 py-1 text-xs font-medium;
+}
+
+/* Spec grid */
+.spec-grid {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 border border-border rounded-lg overflow-hidden;
+}
+
+.spec-row {
+  @apply flex justify-between items-center px-3 py-2 border-b border-border last:border-b-0 bg-card even:bg-secondary/30;
+}
+
+.spec-label {
+  @apply text-xs text-muted-foreground;
+}
+
+.spec-value {
+  @apply text-xs font-medium text-right max-w-[60%];
+}
+
+/* Panel diagram */
+.panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  gap: 3px;
+  margin: 10px 0;
+}
+
+.panel-cell {
+  border-radius: 5px;
+  padding: 5px 3px;
+  font-size: 9px;
+  text-align: center;
+  font-weight: 600;
+  color: #fff;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-ok    { background: #22c55e; }
+.panel-paint { background: #eab308; color: #000; }
+.panel-rep   { background: #f97316; }
+.panel-acc   { background: #ef4444; }
+.panel-none  { background: #e5e7eb; color: #6b7280; }
+
+/* Structural panels row */
+.struct-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.struct-cell {
+  flex: 1;
+  min-width: 70px;
+  font-size: 8px !important;
+  min-height: 32px !important;
+}
+
+/* Panel legend */
+.panel-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  margin-top: 10px;
+  color: #374151;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: middle;
+}
