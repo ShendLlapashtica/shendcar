@@ -138,6 +138,20 @@ const Index = () => {
 
             {/* Main content */}
             <div className="flex-1">
+              {/* Soft banner when serving from static snapshot */}
+              {!isLoading && !isError && data?._source === 'static-fallback' && (
+                <div className="mb-4 px-4 py-2 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm flex items-center gap-2">
+                  <span>⏳</span>
+                  <span>Duke shfaqur të dhëna të ruajtura — listat e freskëta do të ngarkohen së shpejti.</span>
+                </div>
+              )}
+              {!isLoading && !isError && data?._filtered_fallback && (
+                <div className="mb-4 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm flex items-center gap-2">
+                  <span>ℹ️</span>
+                  <span>Shfaqim rezultate të pafiltrura — filtrat do të aplikohen kur të rilidhet me API-n.</span>
+                </div>
+              )}
+
               {isError ? (
                 <div className="text-center py-16">
                   <p className="text-destructive font-medium mb-2">Ndodhi një gabim gjatë ngarkimit të veturave.</p>

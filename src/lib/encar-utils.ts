@@ -341,10 +341,19 @@ export function albaniaPriceBreakdown(eurPrice: number, year: number): PriceBrea
   return { carPrice: eurPrice, shipping, customs, vat, registration, total, note };
 }
 
-export function photoUrl(realName: string): string {
-  if (!realName) return '/placeholder.svg';
-  if (realName.startsWith('http')) return realName;
-  return `https://ci.encar.com${realName}`;
+export function photoUrl(path: string): string {
+  if (!path) return '/placeholder.svg';
+  if (path.startsWith('http')) return path;
+  // Base-path format from search results ends with `_` — append first photo suffix
+  const normalised = path.endsWith('_') ? `${path}001.jpg` : path;
+  return `https://ci.encar.com${normalised}`;
+}
+
+/** Returns the best available photo URL from a car object */
+export function carPhotoUrl(car: { Photo?: string; Photos?: { location?: string; RealName?: string }[] }): string {
+  const first = car.Photos?.[0];
+  const path = first?.location ?? first?.RealName ?? car.Photo;
+  return path ? photoUrl(path) : '/placeholder.svg';
 }
 
 export function carDisplayName(manufacturer: string, model: string, badge?: string): string {

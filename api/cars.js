@@ -1,3 +1,6 @@
+// Bundled at deploy time by Vercel's bundler — no fs needed in production
+const FALLBACK_DATA = require('./fallback-cars.json');
+
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Referer': 'https://www.encar.com/',
@@ -7,8 +10,6 @@ const HEADERS = {
 };
 
 // Build Encar DSL query
-// Single value: _.Manufacturer.BMW.
-// Multiple values: (Or._.Manufacturer.BMW._.Manufacturer.벤츠.)
 function orClause(field, values) {
   if (!values || values.length === 0) return '';
   if (values.length === 1) return `_.${field}.${values[0]}.`;
@@ -24,10 +25,15 @@ function buildQuery(p) {
   if (mfrs.length)  q += orClause('Manufacturer', mfrs);
   if (fuels.length) q += orClause('FuelType', fuels);
   if (trans.length) q += orClause('Transmission', trans);
-  if (p.yearFrom)   q += `_.Year.${p.yearFrom}..`;
-  if (p.yearTo)     q += `_..Year.${p.yearTo}.`;
+  if (p.yearFrom)   q += `_.FormYear.${p.yearFrom}..`;
+  if (p.yearTo)     q += `_..FormYear.${p.yearTo}.`;
   if (p.mileageMax) q += `_..Mileage.${p.mileageMax}.`;
   return `(${q})`;
+}
+
+function isUnfiltered(p) {
+  return !p.manufacturers && !p.fuels && !p.transmissions
+      && !p.yearFrom && !p.yearTo && !p.mileageMax;
 }
 
 async function tryFetch(url, timeoutMs) {
@@ -46,13 +52,12 @@ async function tryFetch(url, timeoutMs) {
 
 async function tryProxy(targetUrl) {
   const enc = encodeURIComponent(targetUrl);
-  // Try direct first (server-side has no CORS restriction), then fall back to proxies
   const attempts = [
-    { name: 'direct',       fn: () => tryFetch(targetUrl, 8000) },
-    { name: 'allorigins',   fn: () => tryFetch(`https://api.allorigins.win/get?url=${enc}`, 12000).then(j => JSON.parse(j.contents)) },
-    { name: 'corsproxy',    fn: () => tryFetch(`https://corsproxy.io/?${enc}`, 12000) },
-    { name: 'codetabs',     fn: () => tryFetch(`https://api.codetabs.com/v1/proxy?quest=${enc}`, 12000) },
-    { name: 'thingproxy',   fn: () => tryFetch(`https://thingproxy.freeboard.io/fetch/${targetUrl}`, 12000) },
+    { name: 'direct',     fn: () => tryFetch(targetUrl, 8000) },
+    { name: 'allorigins', fn: () => tryFetch(`https://api.allorigins.win/get?url=${enc}`, 12000).then(j => JSON.parse(j.contents)) },
+    { name: 'corsproxy',  fn: () => tryFetch(`https://corsproxy.io/?${enc}`, 12000) },
+    { name: 'codetabs',   fn: () => tryFetch(`https://api.codetabs.com/v1/proxy?quest=${enc}`, 12000) },
+    { name: 'thingproxy', fn: () => tryFetch(`https://thingproxy.freeboard.io/fetch/${targetUrl}`, 12000) },
   ];
 
   let lastErr = null;
@@ -69,6 +74,65 @@ async function tryProxy(targetUrl) {
   throw lastErr || new Error('All sources failed');
 }
 
+// Lazy-load KV to avoid crashing when env vars are missing
+let _kv = null;
+async function getKv() {
+  if (_kv) return _kv;
+  try {
+    const mod = await import('@vercel/kv');
+    _kv = mod.kv;
+    return _kv;
+  } catch {
+    return null;
+  }
+}
+
+async function kvGet(key) {
+  try {
+    const kv = await getKv();
+    if (!kv) return null;
+    const val = await kv.get(key);
+    if (!val) return null;
+    return typeof val === 'string' ? JSON.parse(val) : val;
+  } catch (e) {
+    console.warn('[cars] KV get failed:', e.message);
+    return null;
+  }
+}
+
+async function kvSet(key, data, ttl) {
+  try {
+    const kv = await getKv();
+    if (!kv) return;
+    await kv.set(key, JSON.stringify(data), { ex: ttl });
+  } catch (e) {
+    console.warn('[cars] KV set failed:', e.message);
+  }
+}
+
+// Static JSON fallback — bundled at deploy time (2 000 cars, ~1.8 MB)
+function getStaticFallback(pageNum, pageSize) {
+  try {
+    const all = FALLBACK_DATA.SearchResults || [];
+    const start = pageNum * pageSize;
+    const slice = all.slice(start, start + pageSize);
+    if (slice.length === 0) return null;
+    return {
+      Count: FALLBACK_DATA.Count || all.length,
+      SearchResults: slice,
+      _source: 'static-fallback',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normaliseEncarResponse(data) {
+  if (Array.isArray(data?.SearchResults)) return data;
+  if (Array.isArray(data?.Result)) return { Count: data.TotalCount ?? data.Result.length, SearchResults: data.Result };
+  return null;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
@@ -81,25 +145,62 @@ module.exports = async function handler(req, res) {
   } = req.query;
 
   const pageNum  = parseInt(page, 10)  || 0;
-  const countNum = parseInt(count, 10) || 20;
-  const offset   = pageNum * countNum;
-  const query    = buildQuery({ manufacturers, fuels, transmissions, yearFrom, yearTo, mileageMax });
+  const pageSize = parseInt(count, 10) || 20;
+  const params   = { manufacturers, fuels, transmissions, yearFrom, yearTo, mileageMax };
+  const unfiltered = isUnfiltered(params);
+  const kvKey = `cars:page:${pageNum}`;
 
-  // %7C = | (pipe) — must be encoded in the sr param
+  // ── 1. KV cache (unfiltered only) ─────────────────────────────────────────
+  if (unfiltered) {
+    const cached = await kvGet(kvKey);
+    if (cached) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.status(200).json(cached);
+    }
+  }
+
+  // ── 2. Live Encar ──────────────────────────────────────────────────────────
+  const query    = buildQuery(params);
+  const offset   = pageNum * pageSize;
   const encarUrl =
     `https://api.encar.com/search/car/list/general` +
     `?q=${encodeURIComponent(query)}` +
-    `&sr=%7CModifiedDate%7C${offset}%7C${countNum}` +
+    `&sr=%7CModifiedDate%7C${offset}%7C${pageSize}` +
     `&count=true&inav=%7CMetadata%7CSort`;
 
-  console.log('[/api/cars] query:', query);
   console.log('[/api/cars] url:', encarUrl);
 
   try {
-    const data = await tryProxy(encarUrl);
-    return res.status(200).json(data);
-  } catch (err) {
-    console.error('[/api/cars] all failed:', err.message);
-    return res.status(502).json({ error: 'Could not reach Encar', detail: err.message });
+    const raw  = await tryProxy(encarUrl);
+    const data = normaliseEncarResponse(raw);
+    if (data) {
+      // Opportunistically warm the KV cache for unfiltered pages
+      if (unfiltered && data.SearchResults.length > 0) {
+        kvSet(kvKey, data, 7 * 3600);
+      }
+      res.setHeader('X-Cache', 'MISS');
+      return res.status(200).json(data);
+    }
+  } catch (liveErr) {
+    console.warn('[/api/cars] live fetch failed:', liveErr.message);
   }
+
+  // ── 3. Degraded KV fallback for filtered queries ───────────────────────────
+  if (!unfiltered) {
+    const cached = await kvGet(kvKey);
+    if (cached) {
+      res.setHeader('X-Cache', 'DEGRADED');
+      return res.status(200).json({ ...cached, _filtered_fallback: true });
+    }
+  }
+
+  // ── 4. Static JSON fallback ────────────────────────────────────────────────
+  const staticData = getStaticFallback(pageNum, pageSize);
+  if (staticData) {
+    res.setHeader('X-Cache', 'STATIC');
+    return res.status(200).json(staticData);
+  }
+
+  // ── 5. All sources failed ──────────────────────────────────────────────────
+  return res.status(502).json({ error: 'Could not reach Encar', detail: 'All sources exhausted' });
 };

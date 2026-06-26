@@ -16,7 +16,8 @@ export interface EncarCar {
   InteriorColor?: string;
   Price: number;
   Photo?: string;
-  Photos?: { RealName: string }[];
+  // Encar search results use `location`; detail endpoint uses `RealName`
+  Photos?: { location?: string; RealName?: string; type?: string; ordering?: number }[];
   Accident: number;
   AccidentSelf?: number;
   Owners: number;

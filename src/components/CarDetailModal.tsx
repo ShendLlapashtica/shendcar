@@ -35,7 +35,11 @@ interface CarDetailModalProps {
 
 // ── Photo gallery ─────────────────────────────────────────────────────────────
 
-function PhotoGallery({ photos }: { photos: { RealName: string }[] }) {
+function photoPath(p: { location?: string; RealName?: string }): string {
+  return photoUrl(p.location ?? p.RealName ?? '');
+}
+
+function PhotoGallery({ photos }: { photos: { location?: string; RealName?: string }[] }) {
   const [idx, setIdx] = useState(0);
   if (!photos.length) return null;
   const total = photos.length;
@@ -45,7 +49,7 @@ function PhotoGallery({ photos }: { photos: { RealName: string }[] }) {
   return (
     <div className="relative w-full bg-secondary/30">
       <img
-        src={photoUrl(photos[idx].RealName)}
+        src={photoPath(photos[idx])}
         alt={`Foto ${idx + 1}`}
         className="w-full max-h-[50vh] object-contain"
         onError={e => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
@@ -67,7 +71,7 @@ function PhotoGallery({ photos }: { photos: { RealName: string }[] }) {
           {photos.map((p, i) => (
             <img
               key={i}
-              src={photoUrl(p.RealName)}
+              src={photoPath(p)}
               alt={`Thumb ${i + 1}`}
               className={`gallery-thumb${i === idx ? ' active' : ''}`}
               onClick={() => setIdx(i)}
@@ -267,10 +271,15 @@ const CarDetailModal = ({ car, allCars, open, onClose, onSelectCar }: CarDetailM
   const name = carDisplayName(car.Manufacturer, car.Model, car.Badge);
   const eurPrice = krwToEur(car.Price);
   const photos = detail.Photos?.length ? detail.Photos : car.Photos?.length ? car.Photos : [];
+  // FormYear is the 4-digit model year; Year is YYYYMM from the API
+  const displayYear = car.FormYear
+    ? String(car.FormYear).slice(0, 4)
+    : String(Math.floor(Number(car.Year) / 100) || car.Year);
+  const numericYear = parseInt(displayYear, 10) || new Date().getFullYear();
 
   const handleWhatsApp = () => {
     const msg = encodeURIComponent(
-      `Përshëndetje! Jam i interesuar për ${name} (${car.Year}), ${fmtKm(car.Mileage)}, ${fmtEur(eurPrice)}. A mund të më jepni informata?`
+      `Përshëndetje! Jam i interesuar për ${name} (${displayYear}), ${fmtKm(car.Mileage)}, ${fmtEur(eurPrice)}. A mund të më jepni informata?`
     );
     window.open(`https://wa.me/${WA_NUMBER}?text=${msg}`, '_blank');
   };
@@ -324,7 +333,7 @@ const CarDetailModal = ({ car, allCars, open, onClose, onSelectCar }: CarDetailM
               {/* Quick stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 {[
-                  { label: 'Viti', value: car.Year },
+                  { label: 'Viti', value: displayYear },
                   { label: 'Kilometrazha', value: fmtKm(car.Mileage) },
                   { label: 'Karburanti', value: translateFuel(car.FuelType) },
                   { label: 'Transmisioni', value: translateTrans(car.Transmission) },
@@ -341,7 +350,7 @@ const CarDetailModal = ({ car, allCars, open, onClose, onSelectCar }: CarDetailM
               </div>
 
               {/* Price calculator */}
-              <PriceCalculator eurPrice={eurPrice} year={car.Year} />
+              <PriceCalculator eurPrice={eurPrice} year={numericYear} />
 
               <Separator className="my-6" />
 

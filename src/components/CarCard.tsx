@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar, Gauge, Fuel, Settings2, MessageCircle, Eye, MapPin } from 'lucide-react';
 import {
-  carDisplayName, translateFuel, translateTrans, krwToEur, fmtEur, fmtKm, photoUrl,
+  carDisplayName, translateFuel, translateTrans, krwToEur, fmtEur, fmtKm, carPhotoUrl,
 } from '@/lib/encar-utils';
 
 interface CarCardProps {
@@ -18,16 +18,14 @@ const WA_NUMBER = '38343502651';
 const CarCard = ({ car, viewMode, onViewDetails }: CarCardProps) => {
   const name = carDisplayName(car.Manufacturer, car.Model, car.Badge);
   const eurPrice = krwToEur(car.Price);
-  const imgSrc = car.Photos?.[0]?.RealName
-    ? photoUrl(car.Photos[0].RealName)
-    : car.Photo
-      ? photoUrl(car.Photo)
-      : '/placeholder.svg';
+  const imgSrc = carPhotoUrl(car);
+  // FormYear is the 4-digit model year; Year is YYYYMM from the API
+  const displayYear = car.FormYear ? String(car.FormYear).slice(0, 4) : String(Math.floor(Number(car.Year) / 100) || car.Year);
 
   const handleWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
     const msg = encodeURIComponent(
-      `Përshëndetje! Jam i interesuar për ${name} (${car.Year}), ${fmtKm(car.Mileage)}, çmimi ${fmtEur(eurPrice)}. A mund të më jepni më shumë informata?`
+      `Përshëndetje! Jam i interesuar për ${name} (${displayYear}), ${fmtKm(car.Mileage)}, çmimi ${fmtEur(eurPrice)}. A mund të më jepni më shumë informata?`
     );
     window.open(`https://wa.me/${WA_NUMBER}?text=${msg}`, '_blank');
   };
@@ -63,7 +61,7 @@ const CarCard = ({ car, viewMode, onViewDetails }: CarCardProps) => {
                 <span className="font-heading text-xl md:text-2xl font-bold text-primary">{fmtEur(eurPrice)}</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <div className="flex items-center gap-2 text-sm"><Calendar className="h-4 w-4 text-muted-foreground" /><span>{car.Year}</span></div>
+                <div className="flex items-center gap-2 text-sm"><Calendar className="h-4 w-4 text-muted-foreground" /><span>{displayYear}</span></div>
                 <div className="flex items-center gap-2 text-sm">
                   <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20 font-medium">
                     <Gauge className="h-3 w-3 mr-1" />{fmtKm(car.Mileage)}
@@ -118,7 +116,7 @@ const CarCard = ({ car, viewMode, onViewDetails }: CarCardProps) => {
         </div>
         <p className="font-heading text-lg sm:text-xl font-bold text-primary mb-2 sm:mb-3">{fmtEur(eurPrice)}</p>
         <div className="grid grid-cols-2 gap-1 sm:gap-2 text-xs sm:text-sm mb-3 sm:mb-4">
-          <div className="flex items-center gap-1 sm:gap-2 text-muted-foreground"><Calendar className="h-3 w-3 sm:h-4 sm:w-4" /><span>{car.Year}</span></div>
+          <div className="flex items-center gap-1 sm:gap-2 text-muted-foreground"><Calendar className="h-3 w-3 sm:h-4 sm:w-4" /><span>{displayYear}</span></div>
           <div className="flex items-center gap-1 sm:gap-2 text-muted-foreground"><Settings2 className="h-3 w-3 sm:h-4 sm:w-4" /><span className="truncate">{translateTrans(car.Transmission)}</span></div>
           <div className="flex items-center gap-1 sm:gap-2 text-muted-foreground"><Fuel className="h-3 w-3 sm:h-4 sm:w-4" /><span>{translateFuel(car.FuelType)}</span></div>
           <div className="text-muted-foreground text-[10px] sm:text-xs">{car.CylinderCapacity ? `${car.CylinderCapacity} cc` : ''}</div>

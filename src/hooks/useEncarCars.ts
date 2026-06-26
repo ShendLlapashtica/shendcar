@@ -13,6 +13,8 @@ export interface EncarFilters {
 export interface EncarSearchResult {
   Count: number;
   SearchResults: EncarCar[];
+  _source?: string;
+  _filtered_fallback?: boolean;
 }
 
 const PAGE_SIZE = 20;
