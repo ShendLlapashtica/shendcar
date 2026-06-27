@@ -1,8 +1,7 @@
 {
   "version": 2,
   "functions": {
-    "api/*.js": { "runtime": "nodejs20.x" },
-    "api/cron/*.js": { "runtime": "nodejs20.x", "maxDuration": 10 }
+    "api/cron/*.js": { "maxDuration": 10 }
   },
   "crons": [
     { "path": "/api/cron/refresh-cars", "schedule": "0 0 * * *" }
