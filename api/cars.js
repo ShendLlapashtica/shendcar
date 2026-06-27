@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 const ENCAR_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Referer': 'https://www.encar.com/',
@@ -31,6 +34,7 @@ function isUnfiltered(p) {
          !p.yearFrom && !p.yearTo && !p.mileageMax;
 }
 
+// Upstash KV via REST (no SDK)
 async function kvGet(key) {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
@@ -46,6 +50,19 @@ async function kvGet(key) {
   } catch {
     return null;
   }
+}
+
+// Static file fallback — bundled at deploy time
+let _staticCache = null;
+function getStaticCache() {
+  if (_staticCache) return _staticCache;
+  try {
+    const p = path.join(__dirname, '..', 'public', 'cars-cache.json');
+    _staticCache = JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch {
+    _staticCache = null;
+  }
+  return _staticCache;
 }
 
 async function tryFetch(url, timeoutMs) {
@@ -75,14 +92,14 @@ async function tryProxy(targetUrl) {
   for (const { name, fn } of attempts) {
     try {
       const result = await fn();
-      console.log(`[cars] live success via ${name}`);
+      console.log(`[cars] live via ${name}`);
       return result;
     } catch (e) {
-      console.warn(`[cars] ${name} failed:`, e.message);
+      console.warn(`[cars] ${name}:`, e.message);
       lastErr = e;
     }
   }
-  throw lastErr || new Error('All sources failed');
+  throw lastErr || new Error('All proxies failed');
 }
 
 module.exports = async function handler(req, res) {
@@ -101,13 +118,13 @@ module.exports = async function handler(req, res) {
   const countNum = parseInt(count, 10) || 20;
   const offset   = pageNum * countNum;
 
-  // 1. KV cache hit (only for unfiltered, page-aligned requests)
+  // 1. Upstash KV cache (unfiltered requests only)
   if (isUnfiltered(params)) {
-    const kvPage = Math.floor(offset / 20); // cache is stored in 20-item pages
+    const kvPage = Math.floor(offset / 20);
     const cached = await kvGet(`cars:page:${kvPage}`);
     if (cached) {
       res.setHeader('X-Cache', 'HIT');
-      return res.status(200).json({ ...cached, _source: 'cache' });
+      return res.status(200).json({ ...cached, _source: 'kv-cache' });
     }
   }
 
@@ -127,14 +144,21 @@ module.exports = async function handler(req, res) {
     console.warn('[cars] live failed:', liveErr.message);
   }
 
-  // 3. Degraded fallback: return cached unfiltered page 0 as a placeholder
-  if (!isUnfiltered(params)) {
-    const fallback = await kvGet('cars:page:0');
-    if (fallback) {
-      res.setHeader('X-Cache', 'DEGRADED');
-      return res.status(200).json({ ...fallback, _filtered_fallback: true, _source: 'cache-degraded' });
+  // 3. Static JSON bundled with deployment (serves page slice)
+  const staticData = getStaticCache();
+  if (staticData) {
+    const all = staticData.SearchResults || [];
+    const slice = all.slice(offset, offset + countNum);
+    if (slice.length > 0 || pageNum === 0) {
+      res.setHeader('X-Cache', 'STATIC');
+      return res.status(200).json({
+        Count: staticData.Count,
+        SearchResults: slice,
+        _source: 'static-cache',
+        _cachedAt: staticData._cachedAt,
+      });
     }
   }
 
-  return res.status(502).json({ error: 'Could not reach Encar', _source: 'error' });
+  return res.status(502).json({ error: 'Nuk arrihet Encar', _source: 'error' });
 };

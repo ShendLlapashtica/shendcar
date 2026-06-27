@@ -3,77 +3,51 @@ name: Refresh Car Cache
 on:
   schedule:
     - cron: '0 */6 * * *'   # every 6 hours
-  workflow_dispatch:          # allow manual trigger from GitHub Actions UI
+  workflow_dispatch:
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
+    permissions:
+      contents: write        # allows pushing to the repo
 
     steps:
-      - name: Fetch cars from Encar and push to Upstash KV
-        env:
-          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
-          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch cars from Encar and update cache
         run: |
           node -e "
           const https = require('https');
+          const fs = require('fs');
 
-          const PAGES = 500;   // 500 pages × 20 = 10 000 cars
           const PAGE_SIZE = 20;
-          const TTL = 7 * 3600; // 7 hours
+          const PAGES = 50;   // 1000 cars
 
-          const ENCAR_HEADERS = {
+          const HEADERS = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Referer': 'https://www.encar.com/',
             'Accept': 'application/json',
             'Accept-Language': 'ko-KR,ko;q=0.9',
           };
 
-          function get(url, headers) {
+          function get(url) {
             return new Promise((resolve, reject) => {
-              const opts = new URL(url);
-              const req = https.request({ hostname: opts.hostname, path: opts.pathname + opts.search, headers }, res => {
+              const u = new URL(url);
+              const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, headers: HEADERS }, res => {
                 let d = '';
                 res.on('data', c => d += c);
                 res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(e); } });
               });
               req.on('error', reject);
-              req.setTimeout(20000, () => { req.destroy(); reject(new Error('timeout')); });
-              req.end();
-            });
-          }
-
-          function kvSet(key, value) {
-            return new Promise((resolve, reject) => {
-              const body = JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(TTL)]);
-              const url = new URL(process.env.KV_REST_API_URL);
-              const req = https.request({
-                hostname: url.hostname,
-                path: url.pathname,
-                method: 'POST',
-                headers: {
-                  'Authorization': 'Bearer ' + process.env.KV_REST_API_TOKEN,
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(body),
-                },
-              }, res => {
-                let d = '';
-                res.on('data', c => d += c);
-                res.on('end', () => resolve(d));
-              });
-              req.on('error', reject);
-              req.write(body);
+              req.setTimeout(15000, () => { req.destroy(); reject(new Error('timeout')); });
               req.end();
             });
           }
 
           async function main() {
-            if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-              console.log('KV env vars not set — skipping cache write. Set KV_REST_API_URL and KV_REST_API_TOKEN in GitHub secrets.');
-              process.exit(0);
-            }
-            let pagesStored = 0;
+            const allCars = [];
             let totalCount = 0;
             for (let p = 0; p < PAGES; p++) {
               try {
@@ -82,22 +56,61 @@ jobs:
                   encodeURIComponent('(And.Hidden.N.)') +
                   '&sr=%7CModifiedDate%7C' + offset + '%7C' + PAGE_SIZE +
                   '&count=true&inav=%7CMetadata%7CSort';
-                const data = await get(url, ENCAR_HEADERS);
-                const cars = data.SearchResults || data.Result || [];
+                const data = await get(url);
+                const cars = data.SearchResults || [];
                 if (p === 0) totalCount = data.Count || 0;
-                if (cars.length === 0) { console.log('No more cars at page ' + p); break; }
-                await kvSet('cars:page:' + p, { Count: totalCount, SearchResults: cars });
-                pagesStored++;
-                if (p % 50 === 0) console.log('Page ' + p + '/' + PAGES + ' (' + (pagesStored * PAGE_SIZE) + ' cars cached)');
-                await new Promise(r => setTimeout(r, 400));
+                if (cars.length === 0) { console.log('No cars at page ' + p); break; }
+                allCars.push(...cars);
+                if (p % 10 === 0) console.log('Page ' + p + ': ' + allCars.length + ' cars cached');
+                await new Promise(r => setTimeout(r, 300));
               } catch(e) {
                 console.error('Page ' + p + ' failed:', e.message);
               }
             }
-            const meta = { cachedAt: new Date().toISOString(), totalCount, pagesStored };
-            await kvSet('cars:meta', meta);
-            console.log('Done: ' + pagesStored + '/' + PAGES + ' pages, totalCount=' + totalCount);
+
+            if (allCars.length === 0) {
+              console.error('No cars fetched — skipping file update');
+              process.exit(1);
+            }
+
+            const out = JSON.stringify({ Count: totalCount, SearchResults: allCars, _cachedAt: new Date().toISOString() });
+            fs.writeFileSync('public/cars-cache.json', out);
+            console.log('Written ' + allCars.length + ' cars (' + out.length + ' bytes), totalCount=' + totalCount);
+
+            // Also write to Upstash KV if credentials are available
+            if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+              const https2 = require('https');
+              const kvPages = Math.ceil(allCars.length / PAGE_SIZE);
+              let stored = 0;
+              for (let p = 0; p < kvPages; p++) {
+                const slice = allCars.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
+                const body = JSON.stringify(['SET', 'cars:page:' + p, JSON.stringify({ Count: totalCount, SearchResults: slice }), 'EX', String(8 * 3600)]);
+                await new Promise((resolve, reject) => {
+                  const u = new URL(process.env.KV_REST_API_URL);
+                  const req = https2.request({
+                    hostname: u.hostname, path: u.pathname, method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + process.env.KV_REST_API_TOKEN, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+                  }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve()); });
+                  req.on('error', reject);
+                  req.write(body);
+                  req.end();
+                });
+                stored++;
+              }
+              console.log('KV: stored ' + stored + ' pages');
+            }
           }
 
           main().catch(e => { console.error(e); process.exit(1); });
           "
+        env:
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+
+      - name: Commit updated cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/cars-cache.json
+          git diff --staged --quiet || git commit -m "chore: refresh car cache [$(date -u '+%Y-%m-%d %H:%M')] UTC"
+          git push
