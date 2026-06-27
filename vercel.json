@@ -1,11 +1,9 @@
 {
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "outputDirectory": "dist",
+  "version": 2,
+  "functions": {
+    "api/*.js": { "runtime": "nodejs20.x" }
+  },
   "rewrites": [
-    { "source": "/api/cars", "destination": "/api/cars.js" },
-    { "source": "/api/car-detail", "destination": "/api/car-detail.js" },
-    { "source": "/api/healthz", "destination": "/api/healthz.js" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
