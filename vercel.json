@@ -1,9 +1,17 @@
 {
   "version": 2,
   "functions": {
-    "api/*.js": { "runtime": "nodejs20.x" }
+    "api/*.js": { "runtime": "nodejs20.x" },
+    "api/cron/*.js": { "runtime": "nodejs20.x", "maxDuration": 10 }
   },
+  "crons": [
+    { "path": "/api/cron/refresh-cars", "schedule": "0 */6 * * *" }
+  ],
   "rewrites": [
+    { "source": "/api/cars", "destination": "/api/cars.js" },
+    { "source": "/api/car-detail", "destination": "/api/car-detail.js" },
+    { "source": "/api/healthz", "destination": "/api/healthz.js" },
+    { "source": "/api/cron/refresh-cars", "destination": "/api/cron/refresh-cars.js" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
